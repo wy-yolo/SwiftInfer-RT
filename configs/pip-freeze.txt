@@ -61,6 +61,7 @@ onnxruntime-gpu==1.24.2
 packaging @ file:///home/task_176104885106445/conda-bld/packaging_1761049078006/work
 pandas==3.0.3
 pillow==12.1.1
+pip @ file:///home/task_177071101768311/croot/pip_1770711076895/work
 platformdirs==4.11.0
 pluggy @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pluggy_1764896838/work
 propcache==0.5.2
@@ -79,6 +80,7 @@ rich==15.0.0
 safetensors==0.8.0
 scipy==1.17.1
 sentry-sdk==2.66.0
+setuptools==80.10.2
 shellingham==1.5.4
 six==1.17.0
 sympy==1.14.0
@@ -101,6 +103,6 @@ typing_extensions==4.15.0
 urllib3==2.7.0
 wandb==0.28.1
 Werkzeug==3.1.6
+wheel==0.46.3
 xxhash==3.8.1
 yarl==1.24.5
-
