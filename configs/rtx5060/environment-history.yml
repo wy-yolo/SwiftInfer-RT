@@ -1,0 +1,13 @@
+name: minillm-rt-5060
+channels:
+  - defaults
+dependencies:
+  - pytest
+  - cmake=3.31
+  - cuda-nvcc=12.9
+  - ninja
+  - cuda-cudart-dev=12.9
+  - cuda-sanitizer-api=12.9
+  - gxx_linux-64=13
+  - python=3.11
+prefix: /home/wy/miniconda3/envs/minillm-rt-5060

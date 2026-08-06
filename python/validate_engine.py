@@ -19,8 +19,16 @@ from validate_onnx_matrix import dynamic_cache, legacy_cache, tensor_metrics
 
 
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
-PREFILL_CASES = ((1, 1), (1, 256), (1, 4096))
-DECODE_CASES = ((1, 1), (8, 256), (32, 4095))
+TARGET_CASES = {
+    "rtx5090": {
+        "prefill": ((1, 1), (1, 256), (1, 4096)),
+        "decode": ((1, 1), (8, 256), (32, 4095)),
+    },
+    "rtx5060": {
+        "prefill": ((1, 1), (1, 256), (1, 2048)),
+        "decode": ((1, 1), (4, 256), (8, 2047)),
+    },
+}
 APPROVED_GATE = {
     "max_fp32_rank": 3,
     "max_fp32_gap": 0.125,
@@ -340,6 +348,7 @@ def main() -> None:
         "--output", type=Path, default=Path("results/validation/rtx5090_engine.json")
     )
     parser.add_argument("--min-free-gb", type=float, default=28.0)
+    parser.add_argument("--target", choices=sorted(TARGET_CASES), default="rtx5090")
     parser.add_argument("--kind", choices=["prefill", "decode", "both"], default="both")
     parser.add_argument(
         "--decode-kv-source",
@@ -371,7 +380,7 @@ def main() -> None:
     prefill_runner = None
     try:
         if "prefill" in kinds:
-            for batch, sequence in PREFILL_CASES:
+            for batch, sequence in TARGET_CASES[args.target]["prefill"]:
                 feed = make_prefill_feed(batch, sequence, config.vocab_size)
                 hf_outputs = hf_prefill(model, feed["input_ids"])
                 cases.append(
@@ -386,7 +395,7 @@ def main() -> None:
         if "decode" in kinds:
             if args.decode_kv_source == "prefill":
                 prefill_runner = EngineRunner(args.engine_dir / "prefill.plan")
-            for batch, history in DECODE_CASES:
+            for batch, history in TARGET_CASES[args.target]["decode"]:
                 if prefill_runner is not None:
                     feed = make_decode_feed_from_prefill(
                         prefill_runner,

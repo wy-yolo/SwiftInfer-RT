@@ -26,6 +26,20 @@ import torch
 from validate_engine import EngineRunner, gpu_gate
 
 
+TARGET_MATRIX = {
+    "rtx5090": {
+        "prompts": (256, 1024, 2048, 3968),
+        "active": (1, 8, 16, 32),
+        "totals": (16, 32, 64),
+    },
+    "rtx5060": {
+        "prompts": (256, 1024, 2016),
+        "active": (1, 4, 8),
+        "totals": (8, 16),
+    },
+}
+
+
 def percentile(values: list[float], fraction: float) -> float:
     ordered = sorted(values)
     index = min(len(ordered) - 1, max(0, round((len(ordered) - 1) * fraction)))
@@ -324,6 +338,7 @@ def main() -> None:
     parser.add_argument("--reference", type=Path, default=Path("results/validation/cpp_runtime_corpus.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("results/benchmarks/rtx5090/raw.jsonl"))
     parser.add_argument("--mode", choices=("screenshot", "matrix", "all"), default="all")
+    parser.add_argument("--target", choices=sorted(TARGET_MATRIX), default="rtx5090")
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--min-free-gb", type=float, default=28.0)
@@ -333,7 +348,10 @@ def main() -> None:
         parser.error("warmup must be non-negative and repeats must be positive")
     gpu_gate(args.min_free_gb)
     templates = load_templates(args.requests, args.reference)
-    required = {256, 1024, 2048, 3968}
+    if args.target == "rtx5060" and args.mode != "matrix":
+        parser.error("rtx5060 supports the reduced matrix mode only")
+    matrix = TARGET_MATRIX[args.target]
+    required = set(matrix["prompts"])
     if missing := required - templates.keys():
         raise SystemExit(f"missing stable 32-token templates: {sorted(missing)}")
 
@@ -371,10 +389,10 @@ def main() -> None:
             checkpoint(rows, args.output)
 
     if args.mode in ("matrix", "all"):
-        for active in (1, 8, 16, 32):
+        for active in matrix["active"]:
             runtime = PersistentRuntime(args, active)
-            totals = [total for total in (16, 32, 64) if total >= active]
-            for prompt in (256, 1024, 2048, 3968):
+            totals = [total for total in matrix["totals"] if total >= active]
+            for prompt in matrix["prompts"]:
                 for total in totals:
                     experiment = f"kv_dynamic_b{active}"
                     if complete(experiment, prompt, active, total):

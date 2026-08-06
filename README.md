@@ -124,3 +124,27 @@ The complete runtime also passed memcheck, initcheck, racecheck, and synccheck
 for short B1/B8/B32 plus a 3968-token B1 case. Every summary reported zero
 errors or hazards; memcheck reported zero leaked bytes. Logs are under
 `results/sanitizer/logs/`.
+
+## Recorded RTX 5060 Laptop result
+
+The same source commit and FP16 ONNX files were copied to WSL; the RTX 5090
+plans were not reused. TensorRT 10.10 rebuilt reduced-profile plans with a
+2 GiB workspace:
+
+- Prefill B1 S=1/256/2048, SHA256
+  `c38189ed78623d07c8941c72ced5b1947de4305a4e199184dbdaecdd6582c71b`;
+- Decode B1/H1, B4/H256, B8/H2047, SHA256
+  `627a0d20aadcaf6cc68193fbf0c26d4d8c810da9a0947dc5bfef2af7f04290c8`.
+
+All six HF/ORT/TRT profile endpoints passed. A 48-request portability corpus
+covering prompt 256/1024/2016 completed in C++, and the independent Python TRT
+scheduler matched all 48 sequences token-for-token. The reduced benchmark
+completed 18 configurations and 54 measured runs (five warm-ups, three
+repetitions). All 12 active-B4/B8 throughput intervals were above their B1
+baselines. Peak measured throughput was 707.7 tok/s at prompt 256, active B8,
+16 total requests; peak GPU memory was 5455 MiB. Laptop temperature briefly
+reached 86 C, so longer sustained experiments should use adequate cooling.
+
+The RTX 5060 environment locks are in `configs/rtx5060/`. Machine-readable
+engine metadata, validation reports, and benchmark results remain local under
+the ignored `artifacts/` and `results/` directories.

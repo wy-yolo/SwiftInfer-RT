@@ -80,26 +80,29 @@ def main():
         ) / statistics.median(b1_throughput)
 
     matrix_comparisons = []
-    for active in (8, 16, 32):
-        for prompt in (256, 1024, 2048, 3968):
-            for total in (16, 32, 64):
-                baseline_key = ("kv_dynamic_b1", prompt, 1, total)
-                candidate_key = (f"kv_dynamic_b{active}", prompt, active, total)
-                if baseline_key not in groups or candidate_key not in groups:
-                    continue
-                ci = bootstrap_delta(
-                    [float(row["throughput_tok_s"]) for row in groups[candidate_key]],
-                    [float(row["throughput_tok_s"]) for row in groups[baseline_key]],
-                )
-                matrix_comparisons.append(
-                    {
-                        "prompt_tokens": prompt,
-                        "active_batch": active,
-                        "total_requests": total,
-                        "throughput_delta_95ci_tok_s": ci,
-                        "passed": ci[0] > 0,
-                    }
-                )
+    candidate_keys = sorted(
+        key
+        for key in groups
+        if key[0].startswith("kv_dynamic_b") and key[2] > 1
+    )
+    for candidate_key in candidate_keys:
+        _, prompt, active, total = candidate_key
+        baseline_key = ("kv_dynamic_b1", prompt, 1, total)
+        if baseline_key not in groups:
+            continue
+        ci = bootstrap_delta(
+            [float(row["throughput_tok_s"]) for row in groups[candidate_key]],
+            [float(row["throughput_tok_s"]) for row in groups[baseline_key]],
+        )
+        matrix_comparisons.append(
+            {
+                "prompt_tokens": prompt,
+                "active_batch": active,
+                "total_requests": total,
+                "throughput_delta_95ci_tok_s": ci,
+                "passed": ci[0] > 0,
+            }
+        )
     if matrix_comparisons:
         comparisons["matrix_throughput_comparisons"] = matrix_comparisons
         comparisons["matrix_throughput_gate_passed"] = all(
