@@ -19,7 +19,9 @@ add_library(minillm_core
     src/greedy_sampler.cpp)
 target_include_directories(minillm_core PUBLIC include)
 
-add_library(minillm_cuda cuda/kv_cache_kernels.cu)
+add_library(minillm_cuda
+    cuda/kv_cache_kernels.cu
+    cuda/greedy_sampler_cuda.cu)
 target_include_directories(minillm_cuda PUBLIC include)
 target_link_libraries(minillm_cuda PUBLIC CUDA::cudart)
 target_compile_options(minillm_cuda PRIVATE
@@ -34,9 +36,11 @@ if(MINILLM_WITH_TENSORRT)
   if(NOT TENSORRT_INCLUDE_DIR OR NOT TENSORRT_LIBRARY)
     message(FATAL_ERROR "TensorRT C++ SDK not found; set TENSORRT_ROOT")
   endif()
-  add_library(minillm_trt src/tensorrt_backend.cpp)
+  add_library(minillm_trt
+      src/tensorrt_backend.cpp
+      src/qwen_tensorrt_backend.cpp)
   target_include_directories(minillm_trt PUBLIC include ${TENSORRT_INCLUDE_DIR})
-  target_link_libraries(minillm_trt PUBLIC CUDA::cudart ${TENSORRT_LIBRARY})
+  target_link_libraries(minillm_trt PUBLIC minillm_core minillm_cuda CUDA::cudart ${TENSORRT_LIBRARY})
   target_compile_definitions(minillm_trt PUBLIC MINILLM_WITH_TENSORRT=1)
 endif()
 
@@ -60,11 +64,21 @@ if(MINILLM_BUILD_TESTS)
   target_link_libraries(test_scheduler_stress PRIVATE minillm_core)
   add_test(NAME scheduler_stress COMMAND test_scheduler_stress)
 
+  add_executable(test_runtime_session tests/test_runtime_session.cpp)
+  target_link_libraries(test_runtime_session PRIVATE minillm_core)
+  add_test(NAME runtime_session COMMAND test_runtime_session)
+
   add_executable(test_kv_cache_cuda tests/test_kv_cache_cuda.cu)
   target_link_libraries(test_kv_cache_cuda PRIVATE minillm_cuda CUDA::cudart)
   target_compile_options(test_kv_cache_cuda PRIVATE
       $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
   add_test(NAME kv_cache_cuda COMMAND test_kv_cache_cuda)
+
+  add_executable(test_greedy_sampler_cuda tests/test_greedy_sampler_cuda.cu)
+  target_link_libraries(test_greedy_sampler_cuda PRIVATE minillm_cuda CUDA::cudart)
+  target_compile_options(test_greedy_sampler_cuda PRIVATE
+      $<$<COMPILE_LANGUAGE:CUDA>:-lineinfo>)
+  add_test(NAME greedy_sampler_cuda COMMAND test_greedy_sampler_cuda)
 
   add_executable(benchmark_kv_cache_cuda benchmarks/benchmark_kv_cache_cuda.cu)
   target_link_libraries(benchmark_kv_cache_cuda PRIVATE minillm_cuda CUDA::cudart)

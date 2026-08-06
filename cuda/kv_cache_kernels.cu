@@ -18,9 +18,9 @@ __global__ void gatherKernel(const __half* pool, const std::int32_t* tables,
     const int dim = value % head_dim; value /= head_dim;
     const int token = value % max_sequence; value /= max_sequence;
     const int head = value % kv_heads; value /= kv_heads;
+    const int request = value % batch; value /= batch;
     const int kv = value % 2; value /= 2;
-    const int layer = value % layers; value /= layers;
-    const int request = static_cast<int>(value);
+    const int layer = static_cast<int>(value);
     if (token >= lengths[request]) {
       dense[linear] = __float2half(0.0f);
       continue;
@@ -54,9 +54,9 @@ __global__ void scatterKernel(const __half* dense_new,
     const int dim = value % head_dim; value /= head_dim;
     const int query_token = value % token_count; value /= token_count;
     const int head = value % kv_heads; value /= kv_heads;
+    const int request = value % batch; value /= batch;
     const int kv = value % 2; value /= 2;
-    const int layer = value % layers; value /= layers;
-    const int request = static_cast<int>(value);
+    const int layer = static_cast<int>(value);
     const int token = starts[request] + query_token;
     const int logical = token / block_size;
     if (logical >= max_blocks) return;
@@ -113,4 +113,3 @@ cudaError_t launchScatterKv(const __half* dense_new,
 }
 
 }  // namespace minillm
-

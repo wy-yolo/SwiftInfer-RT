@@ -23,8 +23,8 @@ void require(bool condition, const char* message) {
 
 void runCase(int length, int batch) {
   constexpr int block_size = 16;
-  constexpr int layers = 1;
-  constexpr int kv_heads = 1;
+  constexpr int layers = 3;
+  constexpr int kv_heads = 2;
   constexpr int head_dim = 2;
   const int blocks_per_request = (length + block_size - 1) / block_size;
   const int total_blocks = blocks_per_request * batch;
@@ -75,22 +75,26 @@ void runCase(int length, int batch) {
   check(cudaMemcpy(dense_out.data(), d_out, dense_out.size() * sizeof(__half),
                    cudaMemcpyDeviceToHost), "copy result");
 
-  for (int b = 0; b < batch; ++b) {
+  for (int layer = 0; layer < layers; ++layer) {
     for (int kv = 0; kv < 2; ++kv) {
-      for (int token = 0; token < max_sequence; ++token) {
-        for (int dim = 0; dim < head_dim; ++dim) {
+      for (int b = 0; b < batch; ++b) {
+        for (int head = 0; head < kv_heads; ++head) {
+          for (int token = 0; token < max_sequence; ++token) {
+            for (int dim = 0; dim < head_dim; ++dim) {
           const std::size_t out_index =
-              (((static_cast<std::size_t>(b) * 2 + kv) * max_sequence + token) *
-               head_dim + dim);
+              ((((((static_cast<std::size_t>(layer) * 2 + kv) * batch + b) *
+                    kv_heads + head) * max_sequence + token) * head_dim + dim));
           if (token == length) {
             require(__half2float(dense_out[out_index]) == 0.0f, "padding is not zero");
           } else {
             const std::size_t input_index =
-                (((static_cast<std::size_t>(b) * 2 + kv) * length + token) *
-                 head_dim + dim);
+                ((((((static_cast<std::size_t>(layer) * 2 + kv) * batch + b) *
+                      kv_heads + head) * length + token) * head_dim + dim));
             require(std::fabs(__half2float(dense_out[out_index]) -
                               __half2float(dense_new[input_index])) < 0.01f,
                     "gather/scatter mismatch");
+          }
+            }
           }
         }
       }

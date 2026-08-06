@@ -20,6 +20,9 @@ void Scheduler::submit(RequestState request) {
   }
   if (ids_.count(request.request_id)) throw std::invalid_argument("duplicate request id");
   if (ids_.size() >= max_total_) throw std::runtime_error("scheduler queue is full");
+  if (request.submitted_at == RequestState::Clock::time_point{}) {
+    request.submitted_at = RequestState::Clock::now();
+  }
   ids_.insert(request.request_id);
   waiting_.push_back(std::make_shared<RequestState>(std::move(request)));
   admit();
@@ -43,6 +46,7 @@ std::vector<std::shared_ptr<RequestState>> Scheduler::nextBatch(std::size_t limi
 void Scheduler::finishAndErase(std::size_t index, FinishReason reason) {
   auto request = active_.at(index);
   request->finish_reason = reason;
+  request->completed_at = RequestState::Clock::now();
   blocks_.release(request->request_id);
   ids_.erase(request->request_id);
   completed_.push_back(request);
@@ -59,6 +63,9 @@ void Scheduler::appendToken(const std::string& request_id, std::int32_t token,
   const auto index = static_cast<std::size_t>(std::distance(active_.begin(), it));
   auto& request = *it;
   blocks_.ensureCapacity(request_id, request->sequenceLength() + 1);
+  if (request->output_ids.empty()) {
+    request->first_token_at = RequestState::Clock::now();
+  }
   request->output_ids.push_back(token);
   if (token == eos_token_id) {
     finishAndErase(index, FinishReason::kEos);
@@ -81,6 +88,7 @@ void Scheduler::cancel(const std::string& request_id) {
   });
   if (waiting_it == waiting_.end()) throw std::out_of_range("unknown request");
   (*waiting_it)->finish_reason = FinishReason::kCancelled;
+  (*waiting_it)->completed_at = RequestState::Clock::now();
   completed_.push_back(*waiting_it);
   ids_.erase(request_id);
   waiting_.erase(waiting_it);

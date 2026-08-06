@@ -86,6 +86,25 @@ void TensorRTBackend::synchronize() {
   cudaCheck(cudaStreamSynchronize(stream_), "cudaStreamSynchronize");
 }
 
+std::vector<std::int64_t> TensorRTBackend::tensorShape(
+    const std::string& name) const {
+  const auto dims = context_->getTensorShape(name.c_str());
+  if (dims.nbDims < 0) throw std::runtime_error("unknown tensor " + name);
+  std::vector<std::int64_t> result(static_cast<std::size_t>(dims.nbDims));
+  for (int index = 0; index < dims.nbDims; ++index) result[index] = dims.d[index];
+  return result;
+}
+
+nvinfer1::DataType TensorRTBackend::tensorDataType(
+    const std::string& name) const {
+  return engine_->getTensorDataType(name.c_str());
+}
+
+nvinfer1::TensorIOMode TensorRTBackend::tensorMode(
+    const std::string& name) const {
+  return engine_->getTensorIOMode(name.c_str());
+}
+
 std::vector<std::string> TensorRTBackend::inputNames() const {
   std::vector<std::string> names;
   for (int i = 0; i < engine_->getNbIOTensors(); ++i) {
@@ -105,4 +124,3 @@ std::vector<std::string> TensorRTBackend::outputNames() const {
 }
 
 }  // namespace minillm
-

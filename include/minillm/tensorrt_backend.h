@@ -22,6 +22,9 @@ class TensorRTBackend {
   void enqueue();
   void synchronize();
   cudaStream_t stream() const noexcept { return stream_; }
+  std::vector<std::int64_t> tensorShape(const std::string& name) const;
+  nvinfer1::DataType tensorDataType(const std::string& name) const;
+  nvinfer1::TensorIOMode tensorMode(const std::string& name) const;
   std::vector<std::string> inputNames() const;
   std::vector<std::string> outputNames() const;
 
@@ -35,4 +38,3 @@ class TensorRTBackend {
 };
 
 }  // namespace minillm
-
