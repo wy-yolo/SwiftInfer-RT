@@ -1,0 +1,27 @@
+{
+  "python": "3.11.14",
+  "torch": "2.10.0+cu128",
+  "torch_cuda": "12.8",
+  "cuda_available": true,
+  "gpu": "NVIDIA GeForce RTX 5090",
+  "compute_capability": [
+    12,
+    0
+  ],
+  "onnx": "1.20.1",
+  "onnxruntime": "1.24.2",
+  "ort_providers": [
+    "TensorrtExecutionProvider",
+    "CUDAExecutionProvider",
+    "CPUExecutionProvider"
+  ],
+  "transformers": "5.14.1",
+  "nvcc": "/home/mwy24/miniconda3/envs/minillm-rt/bin/nvcc",
+  "compute_sanitizer": "/home/mwy24/miniconda3/envs/minillm-rt/bin/compute-sanitizer",
+  "cmake": "/home/mwy24/miniconda3/envs/minillm-rt/bin/cmake",
+  "ninja": "/home/mwy24/miniconda3/envs/minillm-rt/bin/ninja",
+  "tensorrt_root": "/home/mwy24/project/MiniLLM-RT/artifacts/tensorrt-sdk",
+  "tensorrt": "10.10.0.31",
+  "nvcc_version": "Build cuda_12.9.r12.9/compiler.36037853_0"
+}
+

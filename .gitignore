@@ -1,0 +1,11 @@
+/artifacts/
+/build*/
+/results/
+/.cache/
+__pycache__/
+*.pyc
+*.plan
+*.onnx
+*.onnx.data
+*.safetensors
+
