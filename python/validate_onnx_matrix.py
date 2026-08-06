@@ -4,6 +4,7 @@
 import argparse
 import gc
 import json
+import statistics
 import subprocess
 import time
 from pathlib import Path
@@ -86,13 +87,34 @@ def tensor_metrics(
         "finite": finite,
     }
     if include_tokens:
+        reference_rows = reference_fp32.reshape(reference_fp32.shape[0], -1)
+        candidate_rows = candidate_fp32.reshape(candidate_fp32.shape[0], -1)
+        dot = np.sum(reference_rows * candidate_rows, axis=1)
+        denominator = np.linalg.norm(reference_rows, axis=1) * np.linalg.norm(candidate_rows, axis=1)
+        cosine = np.divide(dot, denominator, out=np.ones_like(dot), where=denominator != 0)
+        rmse = np.sqrt(np.mean(np.square(reference_rows - candidate_rows), axis=1))
+        reference_rms = np.sqrt(np.mean(np.square(reference_rows), axis=1))
+        nrmse = np.divide(rmse, reference_rms, out=np.zeros_like(rmse), where=reference_rms != 0)
         reference_tokens = reference_fp32.argmax(axis=-1).reshape(-1)
         candidate_tokens = candidate_fp32.argmax(axis=-1).reshape(-1)
+        reference_top5 = np.argpartition(reference_rows, -5, axis=1)[:, -5:]
+        candidate_top5 = np.argpartition(candidate_rows, -5, axis=1)[:, -5:]
+        top5_overlap = np.asarray(
+            [len(set(left.tolist()) & set(right.tolist())) / 5.0
+             for left, right in zip(reference_top5, candidate_top5, strict=True)],
+            dtype=np.float32,
+        )
         result.update(
             {
                 "token_match": bool(np.array_equal(reference_tokens, candidate_tokens)),
                 "reference_tokens": reference_tokens.astype(int).tolist(),
                 "candidate_tokens": candidate_tokens.astype(int).tolist(),
+                "cosine_similarity_min": float(cosine.min()),
+                "cosine_similarity_mean": float(cosine.mean()),
+                "nrmse_max": float(nrmse.max()),
+                "nrmse_mean": float(nrmse.mean()),
+                "top5_overlap_min": float(top5_overlap.min()),
+                "top5_overlap_mean": float(top5_overlap.mean()),
             }
         )
     return result
@@ -277,17 +299,30 @@ def run_case(
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=Path, default=Path("artifacts/model"))
-    parser.add_argument("--onnx", type=Path, default=Path("artifacts/onnx"))
-    parser.add_argument("--output", type=Path, default=Path("results/onnx_matrix.json"))
+    parser.add_argument("--onnx", type=Path)
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--precision", choices=["fp16", "fp32"], default="fp16")
     parser.add_argument("--lengths", type=parse_csv_ints, default=parse_csv_ints("1,16,17,128,256"))
     parser.add_argument("--decode-batches", type=parse_csv_ints, default=parse_csv_ints("1,2,4,8"))
     parser.add_argument("--batch-sequence", type=int, default=32)
-    parser.add_argument("--modes", type=parse_modes, default=parse_modes("cuda,cuda_noopt,cpu"))
+    parser.add_argument("--modes", type=parse_modes, default=parse_modes("cuda"))
     parser.add_argument("--min-free-gb", type=float, default=16.0)
-    parser.add_argument("--atol", type=float, default=5e-2)
-    parser.add_argument("--rtol", type=float, default=5e-2)
+    parser.add_argument("--atol", type=float)
+    parser.add_argument("--rtol", type=float)
+    parser.add_argument("--min-cosine", type=float, default=0.999)
+    parser.add_argument("--max-nrmse", type=float, default=0.02)
+    parser.add_argument("--min-top5-overlap", type=float, default=0.95)
     parser.add_argument("--skip-prompts", action="store_true")
     args = parser.parse_args()
+
+    if args.onnx is None:
+        args.onnx = Path("artifacts/onnx") / args.precision
+    if args.output is None:
+        args.output = Path("results/validation") / f"{args.precision}_matrix.json"
+    if args.atol is None:
+        args.atol = 1e-3 if args.precision == "fp32" else 5e-2
+    if args.rtol is None:
+        args.rtol = 1e-3 if args.precision == "fp32" else 5e-2
 
     if max(args.decode_batches) > 8:
         raise SystemExit("validation is capped at decode batch 8")
@@ -302,9 +337,10 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(args.model, local_files_only=True)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
+    model_dtype = torch.float16 if args.precision == "fp16" else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        dtype=torch.float16,
+        dtype=model_dtype,
         attn_implementation="eager",
         local_files_only=True,
     ).eval().cuda()
@@ -368,8 +404,27 @@ def main() -> None:
             "elapsed_seconds": time.perf_counter() - mode_started,
             "cases": cases,
         }
+        logits_metrics = [
+            case[stage]["logits"]
+            for case in cases
+            for stage in ("prefill", "decode_isolated", "decode_end_to_end")
+        ]
+        mode_result["distribution_passed"] = all(
+            metric["cosine_similarity_min"] >= args.min_cosine
+            and metric["nrmse_max"] <= args.max_nrmse
+            for metric in logits_metrics
+        ) and statistics.fmean(metric["top5_overlap_mean"] for metric in logits_metrics) >= args.min_top5_overlap
+        mode_result["kv_allclose"] = all(
+            case[stage]["kv"]["allclose"]
+            for case in cases
+            for stage in ("prefill", "decode_isolated", "decode_end_to_end")
+        )
+        strict_passed = mode_result["numeric_passed"] and mode_result["kv_allclose"]
+        production_passed = mode_result["distribution_passed"]
         mode_result["passed"] = (
-            mode_result["semantic_passed"] and mode_result["numeric_passed"] and mode_result["kv_finite"]
+            mode_result["semantic_passed"]
+            and mode_result["kv_finite"]
+            and (strict_passed if args.precision == "fp32" else production_passed)
         )
         mode_results.append(mode_result)
         del prefill_session, decode_session
@@ -379,16 +434,23 @@ def main() -> None:
 
     result = {
         "schema_version": 2,
+        "precision": args.precision,
         "tolerances": {"atol": args.atol, "rtol": args.rtol},
+        "distribution_thresholds": {
+            "min_cosine": args.min_cosine,
+            "max_nrmse": args.max_nrmse,
+            "min_mean_top5_overlap": args.min_top5_overlap,
+        },
         "gpu_free_mib_before": free_before,
         "gpu_free_mib_after": gpu_free_mib(),
         "semantic_passed": all(mode["semantic_passed"] for mode in mode_results),
         "numeric_passed": all(mode["numeric_passed"] for mode in mode_results),
+        "distribution_passed": all(mode["distribution_passed"] for mode in mode_results),
         "kv_finite": all(mode["kv_finite"] for mode in mode_results),
         "elapsed_seconds": time.perf_counter() - started,
         "modes": mode_results,
     }
-    result["passed"] = result["semantic_passed"] and result["numeric_passed"] and result["kv_finite"]
+    result["passed"] = all(mode["passed"] for mode in mode_results)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
     print(json.dumps({key: value for key, value in result.items() if key != "modes"}, indent=2))

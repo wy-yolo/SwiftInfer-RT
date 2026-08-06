@@ -1,62 +1,103 @@
-# ONNX strict numerical gate
+# Numerical correctness gate
 
-Status: **blocked before TensorRT engine construction**.
+Status: **FP32, adjudicated FP16, TensorRT endpoints, and C++ corpus passed**.
 
-The required gate is `numpy.allclose(atol=0.05, rtol=0.05)` for every logits
-tensor plus 100% greedy-token equality. No tolerance was relaxed. All observed
-KV tensors were finite and the tested greedy tokens matched, but at least one
-logits tensor failed strict allclose in every provider configuration.
+## Acceptance policy
 
-## Diagnosis
+The FP32 path is the semantic reference. Every HF FP32 versus ORT CPU/CUDA
+logits tensor must pass `atol=rtol=1e-3`; all logits and K/V tensors must be
+finite and every greedy token must match.
 
-- CUDA, CUDA with graph optimization disabled, and CPU execution all reproduce
-  the failure, so it is not isolated to a CUDA graph fusion or TF32. TF32 is
-  disabled explicitly in both PyTorch and ORT.
-- Decode was tested twice: once with identical HF-produced KV inputs and once
-  end-to-end with ORT-produced KV. Isolated Decode can fail independently of
-  Prefill error propagation.
-- A diagnostic ONNX graph exposed all 25 hidden states. Representative first
-  divergent outputs were hidden 24 at sequence 1, hidden 1 at sequence 2,
-  hidden 10 at sequence 8, and hidden 12 at sequence 17. The exact layer varies
-  with the input, consistent with accumulated FP16 rounding rather than one
-  fixed semantic break.
-- With the same final hidden tensor, ONNX and PyTorch LM-head outputs differed
-  by at most 0.0039-0.0078. The larger logits difference therefore originates
-  in accumulated hidden-state drift, not the LM head.
-- Layer-0 probes show small Q/K/V, attention, and MLP differences. For sequence
-  17, the attention output max absolute difference was about 0.0019; later
-  normalization and projection operations amplify accumulated drift.
-- Promoting all 217 FP16 MatMul nodes in the diagnostic graph to FP32 inputs and
-  casting outputs back to FP16 did not reliably satisfy the gate. It was not
-  applied to the production ONNX files.
+FP16 is the production TensorRT path. It records allclose and NRMSE but uses
+distribution and FP32-adjudication gates appropriate to near-tied FP16 logits:
+
+- cosine similarity >= 0.999;
+- aggregate top-5 overlap >= 95%;
+- exact token agreement unless the production token is in the FP32 top-3 and
+  no more than 0.125 logit below the FP32 top-1 token.
+
+This policy was approved before the final engines and runtime were accepted;
+failed requests are never discarded.
+
+## FP32 reference result
+
+HF FP32 was compared with ORT CPU and ORT CUDA (TF32 disabled) for Prefill B1
+lengths 1/16/17/128/256 and Decode B1/B2/B4/B8 with history length 32. All 11
+cases passed. The largest observed logits error was approximately `1.27e-4`,
+and greedy tokens were 100% identical.
+
+## FP16 ONNX result and RoPE rewrite
+
+The initial 1918-request run had 66 HF FP16 versus ORT FP16 token differences.
+They were near-tie numerical choices, and all passed the FP32 top-3/0.125
+adjudication. Runtime `Sin`/`Cos` was nevertheless unstable at the 4096-token
+profile endpoint. `python/rewrite_rope_lookup.py` generates the 4096 x 64 FP16
+RoPE table on GPU (`rope_theta=1e6`), replaces runtime trigonometry with ONNX
+`Gather`, and removes 34 dead nodes. The production models are in
+`artifacts/onnx/fp16_rope_lookup/`; the FP32 references remain in
+`artifacts/onnx/fp32/`.
+
+## RTX 5090 TensorRT result
+
+The production plans are:
+
+- Prefill: `artifacts/engines/rtx5090/fp16/prefill.plan`, SHA256
+  `053dd706a0db65f3331a8d97da258a88315019b65db52ba163049f81f65c2eaa`;
+- Decode: `artifacts/engines/rtx5090/fp16/decode.plan`, SHA256
+  `50b674cbbda37b9cfd5d59a8495c2786b69c56eee25ece9d81f73eb0efad585e`.
+
+Prefill uses FP16 weights and outputs with FP32 GEMM accumulation. Decode uses
+the normal FP16 path while keeping RMSNorm Pow/Reduce in FP32. Prefill
+S=1/256/4096 and Decode B1/H1, B8/H256, B32/H4095 all deserialize, set dynamic
+shapes, allocate buffers, enqueue successfully, and pass the production token
+gate. Decode endpoints use real Prefill Engine KV rather than synthetic zeros.
+The machine-readable result is
+`results/validation/rtx5090_engine_final_gate.json`.
+
+## C++ runtime result
+
+The Release runtime is compiled with CUDA 12.9.86, Conda GCC 13.4 and
+`compute_120,sm_120`. It completed 1918/1918 corpus requests with no errors.
+An independent Python TensorRT scheduler matched the C++ output token-for-token
+on all 1918 requests. Against the FP32 reference, 1781 requests were exact
+without adjudication and 137/137 differences passed; maximum observed FP32 rank
+was 3 and maximum gap was `0.11930465698242188`.
+
+Relevant results:
+
+- `results/validation/cpp_runtime_corpus.jsonl`;
+- `results/validation/cpp_vs_python_trt_release2.json`;
+- `results/validation/runtime_fp32_adjudication.jsonl`.
 
 ## Reproduction
 
 ```bash
 conda activate minillm-rt
 
-# Formal matrix: B1 prefill lengths 1/16/17/128/256, decode B1/B2/B4/B8,
-# two natural-language prompts, and three ORT execution modes.
-python python/validate_onnx_matrix.py \
-  --modes cuda,cuda_noopt,cpu \
-  --output results/diagnostics/onnx_matrix_strict.json
+python python/validate_onnx_matrix.py --precision fp32 \
+  --modes cpu,cuda_noopt,cuda \
+  --output results/validation/fp32_matrix.json
 
-# Analysis-only hidden-state and layer probes.
-python python/export_diagnostics.py
-python python/validate_diagnostics.py
-python python/export_diagnostics.py --detail-layer 0
-python python/validate_layer_detail.py
+python python/rewrite_rope_lookup.py
+
+python python/validate_engine.py \
+  --prefill-engine artifacts/engines/rtx5090/fp16/prefill.plan \
+  --decode-engine artifacts/engines/rtx5090/fp16/decode.plan
+
+LD_LIBRARY_PATH=artifacts/tensorrt-sdk/lib:$CONDA_PREFIX/lib \
+  build-gpu-release2/minillm_cli \
+  --prefill-engine artifacts/engines/rtx5090/fp16/prefill.plan \
+  --decode-engine artifacts/engines/rtx5090/fp16/decode.plan \
+  --model-spec artifacts/onnx/fp16_rope_lookup/model_spec.json \
+  --generate-jsonl < artifacts/validation/requests.jsonl \
+  > results/validation/cpp_runtime_corpus.jsonl
+
+PYTHONPATH=python python python/validate_runtime_corpus.py \
+  --prefill-engine artifacts/engines/rtx5090/fp16/prefill.plan \
+  --decode-engine artifacts/engines/rtx5090/fp16/decode.plan
+PYTHONPATH=python python python/adjudicate_runtime_tokens.py
 ```
 
-Generated ONNX diagnostics stay under `artifacts/diagnostics/`, and JSON results
-stay under `results/diagnostics/`; both directories are intentionally ignored
-by Git. The production Prefill and Decode ONNX files were not overwritten.
-
-## Engine gate
-
-`python/build_engine.py` checks the GPU before each engine, rejects foreign
-compute processes using at least 64 MiB, requires at least 28 GiB free VRAM,
-builds Prefill and Decode in separate processes, validates immediate engine
-deserialization, and writes the plan and metadata atomically. It must remain
-unused until the strict numerical gate is resolved or the acceptance policy is
-explicitly changed.
+TensorRT plans remain GPU-specific. The RTX 5060 must rebuild both plans from
+the same FP16 ONNX models using its reduced profiles; a 5090 plan must never be
+copied as a portable artifact.

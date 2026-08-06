@@ -18,20 +18,34 @@ import tensorrt as trt
 LOGGER = trt.Logger(trt.Logger.WARNING)
 
 
-def shape_triplet(name: str, shape: tuple[int, ...], kind: str):
+def shape_triplet(name: str, shape: tuple[int, ...], kind: str, target: str = "rtx5090"):
+    if target == "rtx5090":
+        prefill_opt, prefill_max = 256, 4096
+        decode_opt_batch, decode_max_batch = 8, 32
+        decode_opt_history, decode_max_history = 256, 4095
+    elif target == "rtx5060":
+        prefill_opt, prefill_max = 256, 2048
+        decode_opt_batch, decode_max_batch = 4, 8
+        decode_opt_history, decode_max_history = 256, 2047
+    else:
+        raise ValueError(f"unknown target {target}")
     if kind == "prefill":
         if name in {"input_ids", "attention_mask", "position_ids"}:
-            return (1, 1), (1, 256), (1, 4096)
+            return (1, 1), (1, prefill_opt), (1, prefill_max)
     else:
         if name in {"input_ids", "position_ids"}:
-            return (1, 1), (8, 1), (32, 1)
+            return (1, 1), (decode_opt_batch, 1), (decode_max_batch, 1)
         if name == "attention_mask":
-            return (1, 2), (8, 257), (32, 4096)
+            return (
+                (1, 2),
+                (decode_opt_batch, decode_opt_history + 1),
+                (decode_max_batch, decode_max_history + 1),
+            )
         if name.startswith("past_") and len(shape) == 4:
             return (
                 (1, shape[1], 1, shape[3]),
-                (8, shape[1], 256, shape[3]),
-                (32, shape[1], 4095, shape[3]),
+                (decode_opt_batch, shape[1], decode_opt_history, shape[3]),
+                (decode_max_batch, shape[1], decode_max_history, shape[3]),
             )
     raise ValueError(f"No profile rule for {kind} input {name} with shape {shape}")
 
@@ -125,30 +139,104 @@ def atomic_write(path: Path, payload: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def apply_fp32_stability_constraints(network, fp32_gemm_accumulation: bool = False) -> list[dict]:
+    """Keep exported RMSNorm reductions and powers in FP32."""
+    constrained = []
+    for index in range(network.num_layers):
+        layer = network.get_layer(index)
+        reason = None
+        preserve_output_types = False
+        force_fp32 = layer.type == trt.LayerType.REDUCE
+        if force_fp32:
+            reason = "reduce"
+        if layer.type == trt.LayerType.ELEMENTWISE:
+            # TensorRT 10.10 exposes network layers as the generic ILayer in
+            # Python, so the ElementWise `op` property is unavailable here.
+            # The ONNX parser retains the source Pow operation in the name.
+            force_fp32 = "pow" in layer.name.lower()
+            if force_fp32:
+                reason = "pow"
+        if (
+            "rotary_emb" in layer.name.lower()
+            and layer.type
+            in {
+                trt.LayerType.IDENTITY,
+                trt.LayerType.MATRIX_MULTIPLY,
+                trt.LayerType.UNARY,
+            }
+        ):
+            force_fp32 = True
+            reason = "rotary_cast_frequency_or_trig"
+        if fp32_gemm_accumulation and layer.type == trt.LayerType.MATRIX_MULTIPLY:
+            # Retain FP16 weights/activations and the ONNX output dtype, but
+            # avoid TensorRT's lower-accuracy HALF accumulation tactic.
+            force_fp32 = True
+            preserve_output_types = True
+            reason = "fp32_gemm_accumulation"
+        if not force_fp32:
+            continue
+        layer.precision = trt.float32
+        for output_index in range(layer.num_outputs):
+            output_type = (
+                layer.get_output(output_index).dtype
+                if preserve_output_types
+                else trt.float32
+            )
+            layer.set_output_type(output_index, output_type)
+        constrained.append(
+            {
+                "index": index,
+                "name": layer.name,
+                "type": str(layer.type),
+                "outputs": layer.num_outputs,
+                "reason": reason,
+            }
+        )
+    if not constrained:
+        raise RuntimeError("no TensorRT Reduce/Pow layers were found for FP32 constraints")
+    return constrained
+
+
 def build(
     onnx_path: Path,
     engine_path: Path,
     kind: str,
     workspace_gb: int,
     min_free_gb: float,
+    target: str,
+    strongly_typed: bool,
+    fp32_gemm_accumulation: bool,
 ) -> None:
     gpu = enforce_gpu_gate(min_free_gb)
+    expected_name = "5090" if target == "rtx5090" else "5060"
+    if expected_name not in gpu["name"]:
+        raise RuntimeError(f"target {target} does not match GPU {gpu['name']}")
     artifacts = onnx_artifacts(onnx_path)
     builder = trt.Builder(LOGGER)
-    network = builder.create_network(1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH))
+    network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    if strongly_typed:
+        network_flags |= 1 << int(trt.NetworkDefinitionCreationFlag.STRONGLY_TYPED)
+    network = builder.create_network(network_flags)
     parser = trt.OnnxParser(network, LOGGER)
     if not parser.parse_from_file(str(onnx_path)):
         errors = "\n".join(str(parser.get_error(i)) for i in range(parser.num_errors))
         raise RuntimeError(f"TensorRT ONNX parse failed:\n{errors}")
     config = builder.create_builder_config()
-    config.set_flag(trt.BuilderFlag.FP16)
+    if not strongly_typed:
+        config.set_flag(trt.BuilderFlag.FP16)
+        config.set_flag(trt.BuilderFlag.OBEY_PRECISION_CONSTRAINTS)
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, workspace_gb << 30)
+    fp32_constraints = (
+        []
+        if strongly_typed
+        else apply_fp32_stability_constraints(network, fp32_gemm_accumulation)
+    )
     profile = builder.create_optimization_profile()
     profile_metadata = {}
     for index in range(network.num_inputs):
         tensor = network.get_input(index)
         static_shape = tuple(int(value) for value in tensor.shape)
-        minimum, optimum, maximum = shape_triplet(tensor.name, static_shape, kind)
+        minimum, optimum, maximum = shape_triplet(tensor.name, static_shape, kind, target)
         profile_result = profile.set_shape(tensor.name, minimum, optimum, maximum)
         if profile_result is False:
             raise RuntimeError(f"failed to set profile for {tensor.name}")
@@ -180,7 +268,11 @@ def build(
         "tensorrt": trt.__version__,
         "workspace_gb": workspace_gb,
         "precision": "FP16",
+        "strongly_typed": strongly_typed,
+        "fp32_gemm_accumulation": fp32_gemm_accumulation,
+        "target": target,
         "profile": profile_metadata,
+        "fp32_stability_constraints": fp32_constraints,
         "gpu": gpu,
         "source_commit": source_commit(),
         "built_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -196,12 +288,21 @@ def build(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--onnx-dir", type=Path, default=Path("artifacts/onnx"))
-    parser.add_argument("--engine-dir", type=Path, default=Path("artifacts/engines/rtx5090"))
-    parser.add_argument("--workspace-gb", type=int, default=8)
-    parser.add_argument("--min-free-gb", type=float, default=28.0)
+    parser.add_argument("--onnx-dir", type=Path, default=Path("artifacts/onnx/fp16"))
+    parser.add_argument("--engine-dir", type=Path)
+    parser.add_argument("--workspace-gb", type=int)
+    parser.add_argument("--min-free-gb", type=float)
+    parser.add_argument("--target", choices=["rtx5090", "rtx5060"], default="rtx5090")
+    parser.add_argument("--strongly-typed", action="store_true")
+    parser.add_argument("--fp32-gemm-accumulation", action="store_true")
     parser.add_argument("--kind", choices=["prefill", "decode", "both"], default="both")
     args = parser.parse_args()
+    if args.engine_dir is None:
+        args.engine_dir = Path("artifacts/engines") / args.target / "fp16"
+    if args.workspace_gb is None:
+        args.workspace_gb = 8 if args.target == "rtx5090" else 2
+    if args.min_free_gb is None:
+        args.min_free_gb = 28.0 if args.target == "rtx5090" else 5.5
 
     if args.kind == "both":
         # Separate processes guarantee the first builder and CUDA context are
@@ -221,7 +322,15 @@ def main() -> None:
                     str(args.min_free_gb),
                     "--kind",
                     kind,
-                ],
+                    "--target",
+                    args.target,
+                ]
+                + (["--strongly-typed"] if args.strongly_typed else [])
+                + (
+                    ["--fp32-gemm-accumulation"]
+                    if args.fp32_gemm_accumulation
+                    else []
+                ),
                 check=True,
             )
         return
@@ -231,6 +340,9 @@ def main() -> None:
         args.kind,
         args.workspace_gb,
         args.min_free_gb,
+        args.target,
+        args.strongly_typed,
+        args.fp32_gemm_accumulation,
     )
 
 

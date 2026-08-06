@@ -25,6 +25,14 @@ def test_decode_kv_profile():
     )
 
 
+def test_5060_profile():
+    assert build_engine.shape_triplet("attention_mask", (-1, -1), "decode", "rtx5060") == (
+        (1, 2),
+        (4, 257),
+        (8, 2048),
+    )
+
+
 def test_gpu_gate_rejects_foreign_process(monkeypatch):
     monkeypatch.setattr(build_engine, "gpu_snapshot", lambda: {"memory.free": "31300"})
     monkeypatch.setattr(
