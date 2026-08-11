@@ -11,14 +11,14 @@
 #include <unordered_set>
 #include <vector>
 
-#include "minillm/kv_block_manager.h"
-#include "minillm/model_spec.h"
-#ifdef MINILLM_WITH_TENSORRT
-#include "minillm/qwen_tensorrt_backend.h"
+#include "swiftinfer/kv_block_manager.h"
+#include "swiftinfer/model_spec.h"
+#ifdef SWIFTINFER_WITH_TENSORRT
+#include "swiftinfer/qwen_tensorrt_backend.h"
 #endif
-#include "minillm/request_state.h"
-#include "minillm/runtime_session.h"
-#include "minillm/scheduler.h"
+#include "swiftinfer/request_state.h"
+#include "swiftinfer/runtime_session.h"
+#include "swiftinfer/scheduler.h"
 
 namespace {
 
@@ -139,19 +139,19 @@ std::string jsonEscape(const std::string& value) {
   return output.str();
 }
 
-std::string finishReason(minillm::FinishReason reason) {
+std::string finishReason(swiftinfer::FinishReason reason) {
   switch (reason) {
-    case minillm::FinishReason::kEos: return "eos";
-    case minillm::FinishReason::kLength: return "length";
-    case minillm::FinishReason::kCancelled: return "cancelled";
-    case minillm::FinishReason::kError: return "error";
-    case minillm::FinishReason::kNone: return "none";
+    case swiftinfer::FinishReason::kEos: return "eos";
+    case swiftinfer::FinishReason::kLength: return "length";
+    case swiftinfer::FinishReason::kCancelled: return "cancelled";
+    case swiftinfer::FinishReason::kError: return "error";
+    case swiftinfer::FinishReason::kNone: return "none";
   }
   return "error";
 }
 
-double milliseconds(minillm::RequestState::Clock::time_point begin,
-                    minillm::RequestState::Clock::time_point end) {
+double milliseconds(swiftinfer::RequestState::Clock::time_point begin,
+                    swiftinfer::RequestState::Clock::time_point end) {
   return std::chrono::duration<double, std::milli>(end - begin).count();
 }
 
@@ -161,7 +161,7 @@ void writeError(const std::string& request_id, const std::string& message) {
             << jsonEscape(message) << "\"}\n";
 }
 
-void writeResponse(const minillm::RequestState& request) {
+void writeResponse(const swiftinfer::RequestState& request) {
   const double ttft = milliseconds(request.submitted_at, request.first_token_at);
   const double tpot = request.output_ids.size() <= 1
       ? 0.0
@@ -178,9 +178,9 @@ void writeResponse(const minillm::RequestState& request) {
             << ",\"tpot_ms\":" << tpot << "}\n";
 }
 
-minillm::ModelSpec loadModelSpec(const std::string& path) {
+swiftinfer::ModelSpec loadModelSpec(const std::string& path) {
   const auto text = readFile(path);
-  minillm::ModelSpec spec;
+  swiftinfer::ModelSpec spec;
   spec.num_layers = optionalIntegerField(text, "num_layers", spec.num_layers);
   spec.hidden_size = optionalIntegerField(text, "hidden_size", spec.hidden_size);
   spec.num_attention_heads = optionalIntegerField(
@@ -235,9 +235,9 @@ Options parseOptions(int argc, char** argv) {
   return options;
 }
 
-minillm::RequestState parseRequest(const std::string& line,
-                                   const minillm::ModelSpec& spec) {
-  minillm::RequestState request;
+swiftinfer::RequestState parseRequest(const std::string& line,
+                                   const swiftinfer::ModelSpec& spec) {
+  swiftinfer::RequestState request;
   request.request_id = stringField(line, "request_id");
   request.input_ids = integerArray(line, "input_ids");
   request.max_new_tokens = integerField(line, "max_new_tokens");
@@ -252,7 +252,7 @@ minillm::RequestState parseRequest(const std::string& line,
   return request;
 }
 
-int validateJsonl(const minillm::ModelSpec& spec) {
+int validateJsonl(const swiftinfer::ModelSpec& spec) {
   std::string line;
   while (std::getline(std::cin, line)) {
     try {
@@ -268,19 +268,19 @@ int validateJsonl(const minillm::ModelSpec& spec) {
   return 0;
 }
 
-int generateJsonl(const Options& options, const minillm::ModelSpec& spec) {
-#ifndef MINILLM_WITH_TENSORRT
+int generateJsonl(const Options& options, const swiftinfer::ModelSpec& spec) {
+#ifndef SWIFTINFER_WITH_TENSORRT
   (void)options;
   (void)spec;
   throw std::runtime_error("this binary was built without TensorRT support");
 #else
   constexpr std::size_t kBlockSize = 16;
   constexpr std::size_t kNumBlocks = 8192;
-  minillm::KVBlockManager blocks(kNumBlocks, kBlockSize);
-  minillm::Scheduler scheduler(options.max_active, options.max_total, blocks);
-  minillm::QwenTensorRTBackend backend(spec, blocks, options.prefill_engine,
+  swiftinfer::KVBlockManager blocks(kNumBlocks, kBlockSize);
+  swiftinfer::Scheduler scheduler(options.max_active, options.max_total, blocks);
+  swiftinfer::QwenTensorRTBackend backend(spec, blocks, options.prefill_engine,
                                        options.decode_engine, options.max_active);
-  minillm::RuntimeSession session(spec, scheduler, backend, options.max_active);
+  swiftinfer::RuntimeSession session(spec, scheduler, backend, options.max_active);
   std::vector<std::string> accepted_ids;
   std::unordered_set<std::string> seen_ids;
 
@@ -335,8 +335,8 @@ int generateJsonl(const Options& options, const minillm::ModelSpec& spec) {
 void usage() {
   std::cerr
       << "Usage:\n"
-      << "  minillm_cli --validate-jsonl [--model-spec FILE]\n"
-      << "  minillm_cli --prefill-engine FILE --decode-engine FILE "
+      << "  swiftinfer_cli --validate-jsonl [--model-spec FILE]\n"
+      << "  swiftinfer_cli --prefill-engine FILE --decode-engine FILE "
          "--model-spec FILE --generate-jsonl [--max-active N] "
          "[--max-total N] [--flush-on-empty-line]\n";
 }
@@ -347,7 +347,7 @@ int main(int argc, char** argv) {
   try {
     const auto options = parseOptions(argc, argv);
     const auto spec = options.model_spec.empty()
-        ? minillm::ModelSpec{}
+        ? swiftinfer::ModelSpec{}
         : loadModelSpec(options.model_spec);
     return options.validate_jsonl ? validateJsonl(spec)
                                   : generateJsonl(options, spec);

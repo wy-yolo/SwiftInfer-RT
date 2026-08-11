@@ -4,11 +4,11 @@
 #include <memory>
 #include <vector>
 
-#include "minillm/model_spec.h"
-#include "minillm/request_state.h"
-#include "minillm/scheduler.h"
+#include "swiftinfer/model_spec.h"
+#include "swiftinfer/request_state.h"
+#include "swiftinfer/scheduler.h"
 
-namespace minillm {
+namespace swiftinfer {
 
 class ModelBackend {
  public:
@@ -31,5 +31,5 @@ class RuntimeSession {
   std::size_t decode_batch_limit_;
 };
 
-}  // namespace minillm
+}  // namespace swiftinfer
 

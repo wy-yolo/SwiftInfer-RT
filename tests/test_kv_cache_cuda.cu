@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "minillm/kv_cache_kernels.h"
+#include "swiftinfer/kv_cache_kernels.h"
 
 namespace {
 
@@ -65,10 +65,10 @@ void runCase(int length, int batch) {
   check(cudaMemcpy(d_starts, starts.data(), starts.size() * sizeof(std::int32_t), cudaMemcpyHostToDevice), "copy starts");
   check(cudaMemcpy(d_lengths, lengths.data(), lengths.size() * sizeof(std::int32_t), cudaMemcpyHostToDevice), "copy lengths");
 
-  check(minillm::launchScatterKv(d_new, d_tables, d_starts, batch,
+  check(swiftinfer::launchScatterKv(d_new, d_tables, d_starts, batch,
                                  blocks_per_request, layers, kv_heads, head_dim,
                                  block_size, length, d_pool, nullptr), "scatter launch");
-  check(minillm::launchGatherKv(d_pool, d_tables, d_lengths, batch,
+  check(swiftinfer::launchGatherKv(d_pool, d_tables, d_lengths, batch,
                                 blocks_per_request, layers, kv_heads, head_dim,
                                 block_size, max_sequence, d_out, nullptr), "gather launch");
   check(cudaDeviceSynchronize(), "synchronize");

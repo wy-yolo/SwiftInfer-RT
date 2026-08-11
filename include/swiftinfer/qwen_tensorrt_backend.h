@@ -4,11 +4,11 @@
 #include <memory>
 #include <string>
 
-#include "minillm/kv_block_manager.h"
-#include "minillm/model_spec.h"
-#include "minillm/runtime_session.h"
+#include "swiftinfer/kv_block_manager.h"
+#include "swiftinfer/model_spec.h"
+#include "swiftinfer/runtime_session.h"
 
-namespace minillm {
+namespace swiftinfer {
 
 class QwenTensorRTBackend final : public ModelBackend {
  public:
@@ -28,4 +28,4 @@ class QwenTensorRTBackend final : public ModelBackend {
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace minillm
+}  // namespace swiftinfer

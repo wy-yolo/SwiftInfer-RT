@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace minillm {
+namespace swiftinfer {
 
 class KVBlockManager {
  public:
@@ -34,5 +34,5 @@ class KVBlockManager {
   std::unordered_map<std::string, std::vector<std::int32_t>> tables_;
 };
 
-}  // namespace minillm
+}  // namespace swiftinfer
 

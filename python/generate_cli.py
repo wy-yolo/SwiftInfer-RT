@@ -10,7 +10,7 @@ from transformers import AutoTokenizer
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=Path, default=Path("artifacts/model"))
-    parser.add_argument("--runtime", type=Path, default=Path("build-release/minillm_cli"))
+    parser.add_argument("--runtime", type=Path, default=Path("build-release/swiftinfer_cli"))
     parser.add_argument(
         "--prefill-engine",
         type=Path,

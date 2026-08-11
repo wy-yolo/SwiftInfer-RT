@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace minillm {
+namespace swiftinfer {
 
 enum class FinishReason { kNone, kEos, kLength, kCancelled, kError };
 
@@ -26,4 +26,4 @@ struct RequestState {
   bool finished() const { return finish_reason != FinishReason::kNone; }
 };
 
-}  // namespace minillm
+}  // namespace swiftinfer

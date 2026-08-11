@@ -1,8 +1,8 @@
-#include "minillm/greedy_sampler_cuda.h"
+#include "swiftinfer/greedy_sampler_cuda.h"
 
 #include <cfloat>
 
-namespace minillm {
+namespace swiftinfer {
 namespace {
 
 struct Candidate {
@@ -56,4 +56,4 @@ cudaError_t launchGreedyArgmax(const __half* logits, int batch, int vocab_size,
   return cudaPeekAtLastError();
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer

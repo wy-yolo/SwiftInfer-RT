@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "minillm/kv_cache_kernels.h"
+#include "swiftinfer/kv_cache_kernels.h"
 
 namespace {
 
@@ -46,7 +46,7 @@ void run(int batch, int sequence) {
   check(cudaMemcpy(device_lengths, lengths.data(), lengths.size() * sizeof(std::int32_t),
                    cudaMemcpyHostToDevice), "length copy");
   for (int i = 0; i < 20; ++i) {
-    check(minillm::launchGatherKv(pool, device_tables, device_lengths, batch,
+    check(swiftinfer::launchGatherKv(pool, device_tables, device_lengths, batch,
                                  max_blocks, layers, kv_heads, head_dim, block_size,
                                  sequence, dense, nullptr), "warmup launch");
   }
@@ -57,7 +57,7 @@ void run(int batch, int sequence) {
   check(cudaEventRecord(start), "event record");
   constexpr int iterations = 100;
   for (int i = 0; i < iterations; ++i) {
-    check(minillm::launchGatherKv(pool, device_tables, device_lengths, batch,
+    check(swiftinfer::launchGatherKv(pool, device_tables, device_lengths, batch,
                                  max_blocks, layers, kv_heads, head_dim, block_size,
                                  sequence, dense, nullptr), "benchmark launch");
   }

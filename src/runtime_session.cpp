@@ -1,8 +1,8 @@
-#include "minillm/runtime_session.h"
+#include "swiftinfer/runtime_session.h"
 
 #include <stdexcept>
 
-namespace minillm {
+namespace swiftinfer {
 
 RuntimeSession::RuntimeSession(ModelSpec spec, Scheduler& scheduler,
                                ModelBackend& backend,
@@ -34,5 +34,5 @@ void RuntimeSession::run() {
   }
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer
 

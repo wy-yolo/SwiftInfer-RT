@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <vector>
 
-#include "minillm/greedy_sampler_cuda.h"
+#include "swiftinfer/greedy_sampler_cuda.h"
 
 namespace {
 
@@ -42,7 +42,7 @@ int main() {
   check(cudaMemcpy(device_logits, logits.data(), logits.size() * sizeof(__half),
                    cudaMemcpyHostToDevice),
         "copy logits");
-  check(minillm::launchGreedyArgmax(device_logits, batch, vocab, device_tokens,
+  check(swiftinfer::launchGreedyArgmax(device_logits, batch, vocab, device_tokens,
                                     nullptr),
         "launch argmax");
   std::vector<std::int32_t> actual(batch);

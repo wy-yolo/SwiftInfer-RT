@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-namespace minillm {
+namespace swiftinfer {
 
 struct ModelSpec {
   int num_layers{24};
@@ -19,5 +19,5 @@ struct ModelSpec {
   }
 };
 
-}  // namespace minillm
+}  // namespace swiftinfer
 

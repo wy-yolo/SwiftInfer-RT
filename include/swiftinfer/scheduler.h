@@ -7,10 +7,10 @@
 #include <unordered_set>
 #include <vector>
 
-#include "minillm/kv_block_manager.h"
-#include "minillm/request_state.h"
+#include "swiftinfer/kv_block_manager.h"
+#include "swiftinfer/request_state.h"
 
-namespace minillm {
+namespace swiftinfer {
 
 class Scheduler {
  public:
@@ -40,4 +40,4 @@ class Scheduler {
   std::unordered_set<std::string> ids_;
 };
 
-}  // namespace minillm
+}  // namespace swiftinfer

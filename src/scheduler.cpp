@@ -1,9 +1,9 @@
-#include "minillm/scheduler.h"
+#include "swiftinfer/scheduler.h"
 
 #include <algorithm>
 #include <stdexcept>
 
-namespace minillm {
+namespace swiftinfer {
 
 Scheduler::Scheduler(std::size_t max_active, std::size_t max_total,
                      KVBlockManager& blocks)
@@ -100,4 +100,4 @@ std::vector<std::shared_ptr<RequestState>> Scheduler::takeCompleted() {
   return completed;
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer

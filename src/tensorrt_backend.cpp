@@ -1,10 +1,10 @@
-#include "minillm/tensorrt_backend.h"
+#include "swiftinfer/tensorrt_backend.h"
 
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 
-namespace minillm {
+namespace swiftinfer {
 
 class TensorRTBackend::Logger final : public nvinfer1::ILogger {
  public:
@@ -123,4 +123,4 @@ std::vector<std::string> TensorRTBackend::outputNames() const {
   return names;
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer

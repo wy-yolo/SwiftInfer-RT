@@ -1,8 +1,8 @@
-#include "minillm/greedy_sampler.h"
+#include "swiftinfer/greedy_sampler.h"
 
 #include <stdexcept>
 
-namespace minillm {
+namespace swiftinfer {
 
 std::int32_t greedySample(const float* logits, std::size_t vocab_size) {
   if (!logits || vocab_size == 0) throw std::invalid_argument("empty logits");
@@ -13,5 +13,5 @@ std::int32_t greedySample(const float* logits, std::size_t vocab_size) {
   return static_cast<std::int32_t>(best);
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer
 

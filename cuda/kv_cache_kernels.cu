@@ -1,8 +1,8 @@
-#include "minillm/kv_cache_kernels.h"
+#include "swiftinfer/kv_cache_kernels.h"
 
 #include <cstddef>
 
-namespace minillm {
+namespace swiftinfer {
 namespace {
 
 __global__ void gatherKernel(const __half* pool, const std::int32_t* tables,
@@ -112,4 +112,4 @@ cudaError_t launchScatterKv(const __half* dense_new,
   return cudaPeekAtLastError();
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer

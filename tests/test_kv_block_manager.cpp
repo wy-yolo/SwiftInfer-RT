@@ -1,14 +1,14 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "minillm/kv_block_manager.h"
+#include "swiftinfer/kv_block_manager.h"
 
 void require(bool condition, const char* message) {
   if (!condition) throw std::runtime_error(message);
 }
 
 int main() {
-  minillm::KVBlockManager blocks(4, 16);
+  swiftinfer::KVBlockManager blocks(4, 16);
   require(blocks.freeBlockCount() == 4, "initial free count");
   blocks.ensureCapacity("a", 1);
   require(blocks.requestBlockCount("a") == 1, "one block");

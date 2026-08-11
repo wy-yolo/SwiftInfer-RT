@@ -4,7 +4,7 @@
 #include <cuda_runtime_api.h>
 #include <cstdint>
 
-namespace minillm {
+namespace swiftinfer {
 
 // Dense tensors use [layer, key_or_value, batch, kv_head, token, head_dim].
 // Each TensorRT K/V tensor is therefore one contiguous slice.
@@ -22,4 +22,4 @@ cudaError_t launchScatterKv(const __half* dense_new,
                             int head_dim, int block_size, int token_count,
                             __half* pool, cudaStream_t stream);
 
-}  // namespace minillm
+}  // namespace swiftinfer

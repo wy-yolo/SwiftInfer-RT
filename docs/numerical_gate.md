@@ -85,7 +85,7 @@ python python/validate_engine.py \
   --decode-engine artifacts/engines/rtx5090/fp16/decode.plan
 
 LD_LIBRARY_PATH=artifacts/tensorrt-sdk/lib:$CONDA_PREFIX/lib \
-  build-gpu-release2/minillm_cli \
+  build-gpu-release2/swiftinfer_cli \
   --prefill-engine artifacts/engines/rtx5090/fp16/prefill.plan \
   --decode-engine artifacts/engines/rtx5090/fp16/decode.plan \
   --model-spec artifacts/onnx/fp16_rope_lookup/model_spec.json \

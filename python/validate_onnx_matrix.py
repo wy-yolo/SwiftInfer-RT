@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict HF -> ORT validation for MiniLLM-RT prefill and decode graphs."""
+"""Strict HF -> ORT validation for SwiftInfer-RT prefill and decode graphs."""
 
 import argparse
 import gc

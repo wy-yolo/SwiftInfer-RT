@@ -1,4 +1,4 @@
-# MiniLLM-RT
+# SwiftInfer-RT
 
 A compact C++17/TensorRT runtime for Qwen2.5-0.5B with separate prefill/decode
 engines, request-scoped blocked KV cache, CUDA gather/scatter kernels and FCFS
@@ -19,6 +19,11 @@ source ~/miniconda3/etc/profile.d/conda.sh
 conda activate minillm-rt
 python scripts/verify_environment.py
 ```
+
+The `minillm-rt` and `minillm-rt-5060` Conda environment names predate the
+SwiftInfer-RT rename. They are intentionally retained so the committed
+environment snapshots continue to describe the environments used for the
+recorded experiments.
 
 CUDA compilation must resolve to the environment's CUDA 12.9 compiler, never
 `/usr/bin/nvcc` (CUDA 12.2). TensorRT C++ builds require `TENSORRT_ROOT`.
@@ -148,3 +153,8 @@ reached 86 C, so longer sustained experiments should use adequate cooling.
 The RTX 5060 environment locks are in `configs/rtx5060/`. Machine-readable
 engine metadata, validation reports, and benchmark results remain local under
 the ignored `artifacts/` and `results/` directories.
+
+## License
+
+Licensed under the Apache License 2.0. See [`LICENSE`](LICENSE) and
+[`NOTICE`](NOTICE).

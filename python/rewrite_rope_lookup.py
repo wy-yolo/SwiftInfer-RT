@@ -27,8 +27,8 @@ from onnx import TensorProto, helper, numpy_helper
 
 COS_NODE = "/model/model/rotary_emb/Cast_4"
 SIN_NODE = "/model/model/rotary_emb/Cast_5"
-COS_TABLE = "minillm.rope_cos_table"
-SIN_TABLE = "minillm.rope_sin_table"
+COS_TABLE = "swiftinfer.rope_cos_table"
+SIN_TABLE = "swiftinfer.rope_sin_table"
 
 
 def sha256(path: Path) -> str:

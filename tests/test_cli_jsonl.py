@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = Path(os.environ.get("MINILLM_CLI", ROOT / "build-gpu-release2" / "minillm_cli"))
+CLI = Path(os.environ.get("SWIFTINFER_CLI", ROOT / "build-gpu-release2" / "swiftinfer_cli"))
 SPEC = ROOT / "artifacts" / "onnx" / "fp16_rope_lookup" / "model_spec.json"
 
 

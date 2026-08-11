@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the reproducible RTX 5090 MiniLLM-RT benchmark matrix.
+"""Run the reproducible RTX 5090 SwiftInfer-RT benchmark matrix.
 
 The production variants use one persistent C++ process per active-batch limit,
 so TensorRT deserialization is outside the measurements.  The no-KV baseline
@@ -329,7 +329,7 @@ def run_no_kv_group(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--binary", type=Path, default=Path("build-gpu-release2/minillm_cli"))
+    parser.add_argument("--binary", type=Path, default=Path("build-gpu-release2/swiftinfer_cli"))
     parser.add_argument("--prefill-engine", type=Path, default=Path("artifacts/engines/rtx5090/fp16/prefill.plan"))
     parser.add_argument("--decode-engine", type=Path, default=Path("artifacts/engines/rtx5090/fp16/decode.plan"))
     parser.add_argument("--model-spec", type=Path, default=Path("artifacts/onnx/fp16_rope_lookup/model_spec.json"))

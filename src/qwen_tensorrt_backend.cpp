@@ -1,4 +1,4 @@
-#include "minillm/qwen_tensorrt_backend.h"
+#include "swiftinfer/qwen_tensorrt_backend.h"
 
 #include <NvInfer.h>
 #include <cuda_fp16.h>
@@ -14,11 +14,11 @@
 #include <utility>
 #include <vector>
 
-#include "minillm/greedy_sampler_cuda.h"
-#include "minillm/kv_cache_kernels.h"
-#include "minillm/tensorrt_backend.h"
+#include "swiftinfer/greedy_sampler_cuda.h"
+#include "swiftinfer/kv_cache_kernels.h"
+#include "swiftinfer/tensorrt_backend.h"
 
-namespace minillm {
+namespace swiftinfer {
 namespace {
 
 void cudaCheck(cudaError_t status, const char* operation) {
@@ -367,4 +367,4 @@ std::vector<std::int32_t> QwenTensorRTBackend::decode(
   return result;
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer

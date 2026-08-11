@@ -1,8 +1,8 @@
-#include "minillm/kv_block_manager.h"
+#include "swiftinfer/kv_block_manager.h"
 
 #include <stdexcept>
 
-namespace minillm {
+namespace swiftinfer {
 
 KVBlockManager::KVBlockManager(std::size_t num_blocks, std::size_t block_size)
     : num_blocks_(num_blocks), block_size_(block_size) {
@@ -76,5 +76,5 @@ std::size_t KVBlockManager::requestBlockCount(const std::string& request_id) con
   return it == tables_.end() ? 0 : it->second.size();
 }
 
-}  // namespace minillm
+}  // namespace swiftinfer
 

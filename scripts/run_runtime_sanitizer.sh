@@ -9,7 +9,7 @@ cd "${root}"
 
 sanitizer="${COMPUTE_SANITIZER:-${CONDA_PREFIX:-}/bin/compute-sanitizer}"
 python_bin="${PYTHON:-${CONDA_PREFIX:-}/bin/python}"
-binary="${build_dir}/minillm_cli"
+binary="${build_dir}/swiftinfer_cli"
 if [[ ! -x "${sanitizer}" || ! -x "${binary}" || ! -x "${python_bin}" ]]; then
   echo "activate minillm-rt and provide a RelWithDebInfo TensorRT build" >&2
   exit 2

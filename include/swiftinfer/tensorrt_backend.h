@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace minillm {
+namespace swiftinfer {
 
 class TensorRTBackend {
  public:
@@ -37,4 +37,4 @@ class TensorRTBackend {
   cudaStream_t stream_{nullptr};
 };
 
-}  // namespace minillm
+}  // namespace swiftinfer

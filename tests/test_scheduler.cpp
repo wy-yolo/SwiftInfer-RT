@@ -1,10 +1,10 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "minillm/scheduler.h"
+#include "swiftinfer/scheduler.h"
 
-minillm::RequestState makeRequest(const std::string& id, std::size_t max_new = 2) {
-  minillm::RequestState request;
+swiftinfer::RequestState makeRequest(const std::string& id, std::size_t max_new = 2) {
+  swiftinfer::RequestState request;
   request.request_id = id;
   request.input_ids = {1, 2, 3};
   request.max_new_tokens = max_new;
@@ -16,8 +16,8 @@ void require(bool condition, const char* message) {
 }
 
 int main() {
-  minillm::KVBlockManager blocks(16, 16);
-  minillm::Scheduler scheduler(2, 4, blocks);
+  swiftinfer::KVBlockManager blocks(16, 16);
+  swiftinfer::Scheduler scheduler(2, 4, blocks);
   scheduler.submit(makeRequest("a"));
   scheduler.submit(makeRequest("b", 4));
   scheduler.submit(makeRequest("c"));
